@@ -1,0 +1,74 @@
+[InitializableModule]
+    [ModuleDependency(typeof(EPiServer.Web.InitializationModule))]
+    public class PageRestrictionInitializationModel : IInitializableModule
+    {
+        private IContentTypeRepository _contentTypeRepository;
+        private IAvailableSettingsRepository _availableSettingsRepository;
+        private ILogger _log;
+
+        public void Initialize(InitializationEngine context)
+        {
+            _contentTypeRepository = ServiceLocator.Current.GetInstance<IContentTypeRepository>();
+            _availableSettingsRepository = ServiceLocator.Current.GetInstance<IAvailableSettingsRepository>();
+            _log = LogManager.GetLogger();
+
+            // pages that should be leaves and not allow anything
+            DisallowAll<EventPage>();
+            DisallowAll<NewsPage>();
+            DisallowAll<BlogPage>();
+            DisallowAll<ProductPage>();
+
+            // Home Page
+            SetPageRestriction<HomePage>(new List<Type>
+            {
+                typeof(NewsEventsLandingPage),
+                typeof(BlogLandingPage),
+                typeof(GeneralPage),
+                typeof(ProductCategoryPage)
+            });
+
+            SetPageRestriction<NewsEventsLandingPage>(new List<Type>
+            {
+                typeof(EventPage),
+                typeof(NewsPage)
+            });
+
+            // ... etc ...
+        }
+
+        private void DisallowAll<T>()
+        {
+            var page = _contentTypeRepository.Load(typeof(T));
+
+            var setting = new AvailableSetting
+            {
+                Availability = Availability.None
+            };
+
+            _availableSettingsRepository.RegisterSetting(page, setting);
+        }
+
+        public void Uninitialize(InitializationEngine context)
+        {
+        }
+
+        private void SetPageRestriction<T>(IEnumerable<Type> pageTypes)
+        {
+            var page = _contentTypeRepository.Load(typeof(T));
+
+            var setting = new AvailableSetting
+            {
+                Availability = Availability.Specific
+            };
+
+            foreach (var pageType in pageTypes)
+            {
+                var contentType = _contentTypeRepository.Load(pageType);
+                setting.AllowedContentTypeNames.Add(contentType.Name);
+            }
+
+            _availableSettingsRepository.RegisterSetting(page, setting);
+
+            _log.Log(Level.Debug, $"{page.Name} restriction added.");
+        }
+    }
